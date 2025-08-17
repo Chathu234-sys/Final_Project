@@ -1,0 +1,13 @@
+# ── Core web stack ─────────────────────────
+Flask==2.3.3
+Flask-WTF==1.2.1
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Werkzeug==2.3.7
+python-dotenv==1.0.1
+
+# ── Data / ML stack ────────────────────────
+tensorflow==2.14.0
+pandas==2.2.1
+numpy==1.26.4
+scikit-learn==1.4.1.post1

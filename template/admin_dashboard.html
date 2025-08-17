@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - Glossify</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+<style>
+  body {
+    background: linear-gradient(to right, #ffe4e6, #fce7f3);
+  }
+</style>
+
+<!-- Navigation Bar -->
+<header class="bg-white shadow-md flex justify-between items-center px-6 py-4">
+  <div class="flex items-center space-x-3">
+    <img src="images/logo2.PNG" alt="Glossify Logo" class="w-10 h-10 rounded-full object-cover">
+    <h1 class="text-2xl font-bold text-pink-600">Glossify</h1>
+  </div>
+  <h1 class="text-2xl font-bold text-pink-600">Admin Dashboard</h1>
+  <a href="admin_login.html" title="Logout">
+    <i class="fas fa-sign-out-alt text-pink-600 text-2xl hover:text-pink-800 transition"></i>
+    <span class="text-xl font text-pink-600">Logout</span>
+  </a>
+</header>
+
+<!-- Loading Spinner -->
+<div id="loadingOverlay" class="fixed inset-0 bg-white bg-opacity-80 z-50 hidden flex items-center justify-center">
+  <div class="flex flex-col items-center">
+    <svg class="animate-spin h-12 w-12 text-pink-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+    </svg>
+    <p class="mt-4 text-pink-600 font-semibold text-lg">Retraining model, please wait...</p>
+  </div>
+</div>
+
+<!-- Dashboard Main -->
+<main class="p-6 flex-grow">
+  <div class="grid md:grid-cols-3 gap-6">
+    <div class="bg-white p-6 rounded-lg shadow text-center">
+      <h2 class="text-xl font-bold text-pink-600">Users</h2>
+      <p class="text-gray-600 mt-2">Total Registered: <span class="font-bold">--</span></p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow text-center">
+      <h2 class="text-xl font-bold text-pink-600">Quizzes Taken</h2>
+      <p class="text-gray-600 mt-2">Today: <span class="font-bold">--</span></p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow text-center">
+      <h2 class="text-xl font-bold text-pink-600">Polishes</h2>
+      <p class="text-gray-600 mt-2">Total in Database: <span class="font-bold">--</span></p>
+    </div>
+  </div>
+
+  <!-- Model Retraining Section -->
+  <div class="mt-10">
+    <p class="mb-4 text-sm text-gray-600">
+      <strong>Model last retrained:</strong> <span id="lastRetrained" class="text-pink-600 font-medium">--</span>
+    </p>
+    <div class="flex flex-col md:flex-row gap-4 mb-6">
+      <a href="manage_product.html" class="inline-block bg-pink-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-pink-600 transition">Manage Products</a>
+      <form id="retrainForm" method="POST">
+        <button type="submit" class="inline-block bg-pink-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-pink-600 transition">Retrain Model</button>
+      </form>
+    </div>
+
+    <!-- Model Training Summary Table -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+      <h3 class="text-lg font-bold text-pink-600 p-4 border-b">Model Training History</h3>
+      <table class="w-full table-auto text-left text-sm">
+        <thead class="bg-pink-100 text-pink-700">
+          <tr>
+            <th class="px-4 py-2">#</th>
+            <th class="px-4 py-2">Date</th>
+            <th class="px-4 py-2">Time</th>
+            <th class="px-4 py-2">Status</th>
+          </tr>
+        </thead>
+        <tbody id="trainingHistory">
+          <!-- Example static rows; in real usage, populate from server -->
+          
+          <tr class="border-t">
+            <td class="px-4 py-2">2</td>
+            <td class="px-4 py-2">2025-07-22</td>
+            <td class="px-4 py-2">02:30 PM</td>
+            <td class="px-4 py-2 text-green-600 font-semibold">Success</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- Footer -->
+<footer class="bg-white text-center text-sm text-gray-600 py-4 shadow-inner">
+  &copy; 2025 <span class="text-pink-500 font-semibold">Glossify</span>. All rights reserved.
+</footer>
+
+<!-- Loading Overlay Script -->
+<script>
+  const form = document.getElementById('retrainForm');
+  const overlay = document.getElementById('loadingOverlay');
+  const lastRetrained = document.getElementById('lastRetrained');
+
+  form.addEventListener('submit', function (e) {
+    overlay.classList.remove('hidden');
+
+    // Simulate model training and date update (you'll replace with actual POST and backend handling)
+    setTimeout(() => {
+      overlay.classList.add('hidden');
+
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      lastRetrained.textContent = `${dateStr} ${timeStr}`;
+
+      const table = document.getElementById('trainingHistory');
+      const newRow = `
+        <tr class="border-t">
+          <td class="px-4 py-2">${table.rows.length + 1}</td>
+          <td class="px-4 py-2">${dateStr}</td>
+          <td class="px-4 py-2">${timeStr}</td>
+          <td class="px-4 py-2 text-green-600 font-semibold">Success</td>
+        </tr>`;
+      table.insertAdjacentHTML('afterbegin', newRow);
+    }, 2500); // Simulate delay
+    e.preventDefault();
+  });
+</script>
+
+</body>
+</html>

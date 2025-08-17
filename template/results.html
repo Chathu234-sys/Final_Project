@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Your Nail Polish Matches - Glossify</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to right, #ff9be9, #f758d1);
+      margin: 0;
+      padding: 40px 20px;
+      color: #333;
+    }
+
+    .card {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 8px 20px rgba(233, 30, 99, 0.2);
+      padding: 20px;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+    }
+
+    .card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+
+    .color-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin: 10px auto 0;
+      border: 2px solid #610b47;
+    }
+
+    .btn-secondary {
+      display: inline-block;
+      margin-top: 30px;
+      padding: 12px 24px;
+      background-color: #ea48af;
+      color: white;
+      font-weight: bold;
+      border-radius: 30px;
+      text-decoration: none;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      background-color: #b52988;
+    }
+  </style>
+</head>
+<body>
+  <div class="max-w-5xl mx-auto text-center">
+    <h2 class="text-4xl font-bold text-pink-600 mb-10">Your Recommended Shades</h2>
+    
+    <div class="grid gap-8 md:grid-cols-3">
+      {% for polish in recommendations %}
+      <div class="card">
+        <img src="{{ url_for('static', filename=polish.image) }}" alt="{{ polish.name }}">
+        <h3 class="text-xl font-semibold text-pink-500">{{ polish.name }}</h3>
+        <p class="text-sm mb-2"><strong>Brand:</strong> {{ polish.brand }}</p>
+        <div class="color-box" style="background-color: {{ polish.hex }}"></div>
+      </div>
+      {% else %}
+      <p class="col-span-full text-lg font-medium text-gray-600">No exact matches found. Try changing your answers!</p>
+      {% endfor %}
+    </div>
+
+    <a href="{{ url_for('quiz') }}" class="btn-secondary"> Try Again</a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Products - Glossify</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome -->
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+    }
+
+    /* Tooltip styling */
+    .tooltip {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip .tooltip-text {
+      visibility: hidden;
+      width: 60px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 4px;
+      padding: 4px 6px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%; /* Position above the icon */
+      left: 50%;
+      margin-left: -30px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-size: 12px;
+    }
+
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+  <!-- Navigation Bar -->
+  <header class="bg-pink-600 text-white py-4 px-6 shadow-md flex justify-between items-center">
+    <a href="/" class="text-2xl font-bold flex items-center space-x-2">
+      <img src="images/logo2.PNG" alt="Glossify Logo" class="w-8 h-8 rounded-full object-cover">
+      <span>Glossify</span>
+    </a>
+    <nav class="flex items-center space-x-6">
+      <a href="/" class="hover:underline">Home</a>
+      
+      <!-- Logout Icon with Tooltip -->
+      <div class="tooltip">
+        <a href="/logout" class="hover:text-gray-200 transition">
+          <i class="fas fa-sign-out-alt text-xl"></i>
+        </a>
+        <span class="tooltip-text">Logout</span>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow p-6 max-w-6xl mx-auto w-full">
+    <h1 class="text-3xl font-bold text-pink-600 mb-6">Manage Nail Polish Products</h1>
+
+    <!-- Add Product Form -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <form action="/admin/add-product" method="POST" enctype="multipart/form-data" class="grid gap-4 md:grid-cols-2">
+        <input type="text" name="name" placeholder="Product Name" class="border px-4 py-2 rounded" required>
+        <input type="text" name="brand" placeholder="Brand Name" class="border px-4 py-2 rounded" required>
+        <input type="color" name="hex" class="w-16 h-12 border rounded-full">
+        <input type="file" name="image" accept="image/*" class="border px-4 py-2 rounded">
+        <div class="col-span-2">
+          <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded">
+            Add Product
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Current Products Table -->
+    <section class="mt-10">
+      <h2 class="text-xl font-semibold mb-4">Current Products</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full table-auto border-collapse text-sm md:text-base">
+          <thead class="bg-pink-100">
+            <tr>
+              <th class="border px-4 py-2">Name</th>
+              <th class="border px-4 py-2">Brand</th>
+              <th class="border px-4 py-2">Color</th>
+              <th class="border px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr class="bg-white hover:bg-pink-50">
+              <td class="border px-4 py-2">{{ product.name }}</td>
+              <td class="border px-4 py-2">{{ product.brand }}</td>
+              <td class="border px-4 py-2">
+                <div class="w-6 h-6 rounded-full mx-auto" style="background-color: {{ product.hex }}"></div>
+              </td>
+              <td class="border px-4 py-2 text-center">
+                <a href="/admin/edit/{{ product.id }}" class="text-blue-500 hover:underline mr-2">Edit</a>
+                <a href="/admin/delete/{{ product.id }}" class="text-red-500 hover:underline">Delete</a>
+              </td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-pink-600 text-white text-center py-4">
+    <p class="text-sm">&copy; 2025 Glossify. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>

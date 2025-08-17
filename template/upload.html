@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Glossify - Nail Polish Recommendation</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-pink-50 via-fuchsia-100 to-indigo-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+  <!-- Main container -->
+  <div class="w-full max-w-3xl bg-white bg-opacity-90 backdrop-blur-xl rounded-2xl shadow-2xl p-8 transition-all">
+    
+    <!-- Header section -->
+    <header class="mb-10 text-center">
+      <h1 class="text-5xl font-extrabold text-pink-600 drop-shadow-md mb-3">Glossify</h1>
+      <p class="text-lg text-gray-700">Discover Your Perfect Nail Polish Shade</p>
+    </header>
+
+    <!-- Image upload panel -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">Upload Your Nail Image</h2>
+
+      <!-- Form for image upload -->
+      <form id="uploadForm" class="space-y-4" novalidate>
+        <!-- Drag and drop area -->
+        <div id="dropArea"
+             class="border-4 border-dashed border-pink-400 rounded-xl p-10 text-center cursor-pointer transition-all hover:border-pink-600 hover:bg-pink-50 focus:outline-none focus:ring-4 focus:ring-pink-300"
+             tabindex="0" aria-label="File Upload Drop Area">
+          <p class="mb-3 text-gray-600 text-sm">Drag & drop your nail image here</p>
+          <label for="fileInput"
+                 class="inline-block bg-pink-500 text-white font-semibold py-2 px-6 rounded-full shadow-lg hover:bg-pink-600 transition duration-300">
+            Browse Files
+          </label>
+          <input type="file" id="fileInput" name="nailImage" accept="image/*" class="hidden" />
+        </div>
+
+        <!-- Thumbnail preview -->
+        <div id="previewContainer" class="mt-5 flex justify-center" aria-live="polite"></div>
+
+        <!-- Error message -->
+        <p id="errorMessage" class="mt-2 text-red-600 font-medium text-center" role="alert" aria-live="assertive"></p>
+      </form>
+    </section>
+
+    <!-- Placeholder for future form inputs -->
+    <section class="text-center">
+      <p class="text-gray-600 text-sm">✨ Stay tuned! A fun quiz about your skin tone, occasion, and more preferences is coming soon to personalize your polish picks! </p>
+    </section>
+  </div>
+
+  <!-- JavaScript for image upload functionality -->
+  <script>
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('fileInput');
+    const previewContainer = document.getElementById('previewContainer');
+    const errorMessage = document.getElementById('errorMessage');
+
+    // Prevent default behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // Highlight effects
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, () => {
+        dropArea.classList.add('border-pink-600', 'bg-pink-100');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, () => {
+        dropArea.classList.remove('border-pink-600', 'bg-pink-100');
+      }, false);
+    });
+
+    dropArea.addEventListener('drop', handleDrop, false);
+    fileInput.addEventListener('change', () => {
+      handleFiles(fileInput.files);
+    });
+
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      handleFiles(files);
+    }
+
+    function handleFiles(files) {
+      clearPreview();
+      clearError();
+
+      if (files.length === 0) return;
+
+      const file = files[0];
+
+      if (!file.type.startsWith('image/')) {
+        showError('Please upload a valid image file.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const img = document.createElement('img');
+        img.src = event.target.result;
+        img.alt = 'Uploaded nail image preview';
+        img.className = 'max-w-xs max-h-48 rounded-lg shadow-md';
+        previewContainer.appendChild(img);
+
+        // Redirect to quiz page after short delay
+        setTimeout(() => {
+          window.location.href = 'quiz.html';
+        }, 1500); // 1.5 second delay for preview effect
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearPreview() {
+      previewContainer.innerHTML = '';
+    }
+
+    function showError(message) {
+      errorMessage.textContent = message;
+    }
+
+    function clearError() {
+      errorMessage.textContent = '';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact Us - Glossify</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Google Font - Poppins -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    body {
+      font-family: 'Poppins', system-ui, sans-serif;
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fade-in {
+      animation: fade-in 0.6s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-pink-50 min-h-screen flex flex-col justify-between">
+
+  <!-- Header -->
+  <header class="bg-pink-500 text-white py-4 px-6 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <a href="/" class="flex items-center space-x-2">
+        <img src="images/logo2.PNG" alt="Glossify Logo" class="w-8 h-8 rounded-full object-cover" />
+        <span class="text-xl font-bold">Glossify</span>
+      </a>
+      <nav>
+        <a href="/" class="text-sm hover:text-pink-100">Home</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Contact Form Section -->
+  <main class="flex-grow py-12 px-6 animate-fade-in">
+    <section class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+      <h2 class="text-3xl font-bold text-center text-pink-600 mb-6">Contact Us</h2>
+      <p class="text-center text-gray-600 mb-8">We’d love to hear from you! Fill out the form below or contact us directly.</p>
+
+      <form action="/send-message" method="POST" class="grid gap-6 md:grid-cols-2">
+        <!-- Name -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1">Full Name</label>
+          <input type="text" name="name" required
+            class="w-full border border-gray-300 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400" />
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label class="block text-sm font-medium mb-1">Email Address</label>
+          <input type="email" name="email" required
+            class="w-full border border-gray-300 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400" />
+        </div>
+
+        <!-- Phone -->
+        <div>
+          <label class="block text-sm font-medium mb-1">Phone Number (optional)</label>
+          <input type="tel" name="phone"
+            class="w-full border border-gray-300 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400" />
+        </div>
+
+        <!-- Message -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1">Your Message</label>
+          <textarea name="message" rows="5" required
+            class="w-full border border-gray-300 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400"></textarea>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="md:col-span-2 text-center">
+          <button type="submit"
+            class="bg-pink-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-pink-600 transition-all duration-300">
+            Send Message
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Contact Info Section -->
+    <section class="max-w-4xl mx-auto grid md:grid-cols-2 gap-6 mt-12 text-center">
+      <!-- Email Info -->
+      <div class="bg-white shadow-md rounded-lg p-6 border-t-4 border-pink-500">
+        <div class="text-3xl text-pink-500 mb-2">
+          <i class="fas fa-envelope"></i>
+        </div>
+        <h4 class="text-lg font-semibold mb-1">Email</h4>
+        <p class="text-gray-600">
+          <a href="mailto:support@glossify.lk" class="text-pink-500 hover:underline">support@glossify.lk</a>
+        </p>
+      </div>
+
+      <!-- Phone Info -->
+      <div class="bg-white shadow-md rounded-lg p-6 border-t-4 border-pink-500">
+        <div class="text-3xl text-pink-500 mb-2">
+          <i class="fas fa-phone-alt"></i>
+        </div>
+        <h4 class="text-lg font-semibold mb-1">Phone</h4>
+        <p class="text-gray-600">+94 77 123 4567</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-pink-500 text-white text-center py-4 mt-10">
+    <p class="text-sm">&copy; 2025 Glossify. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
