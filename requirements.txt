@@ -1,13 +1,27 @@
-# ── Core web stack ─────────────────────────
+# Flask and web framework dependencies
 Flask==2.3.3
-Flask-WTF==1.2.1
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
-Werkzeug==2.3.7
-python-dotenv==1.0.1
+PyJWT==2.8.0
+Werkzeug==3.0.1
 
-# ── Data / ML stack ────────────────────────
-tensorflow==2.14.0
-pandas==2.2.1
-numpy==1.26.4
-scikit-learn==1.4.1.post1
+# Database dependencies
+SQLAlchemy==2.0.23
+PyMySQL==1.1.0
+cryptography==41.0.7
+
+# Template engine
+Jinja2==3.1.2
+
+# Existing ML dependencies
+tensorflow==2.15.0
+opencv-python==4.8.1.78
+mediapipe==0.10.7
+numpy<2.0
+pandas==2.1.4
+scikit-learn==1.3.2
+matplotlib==3.8.2
+seaborn==0.13.0
+
+# Utility dependencies
+python-dotenv==1.0.0

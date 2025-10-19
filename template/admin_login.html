@@ -6,24 +6,36 @@
   <title>Admin Login - Glossify</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background: linear-gradient(to right, #ffe4e6, #fce7f3);
+    }
+    .flash-message {
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+    .flash-success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .flash-error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+  </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between text-gray-800 bg-pink-300">
-<style>
-  body {
-    background: linear-gradient(to right, #ffe4e6, #fce7f3);
-  }
-</style>
   <!-- Navbar -->
   <nav class="bg-white bg-opacity-90 p-4 flex justify-between items-center shadow-md">
     <div class="flex items-center space-x-3">
-      <img src="images/logo2.PNG" alt="Glossify Logo" class="w-8 h-8 rounded-full object-cover" />
+      <img src="{{ url_for('static', filename='images/logo2.PNG') }}" alt="Glossify Logo" class="w-8 h-8 rounded-full object-cover" />
       <span class="text-xl font-bold text-pink-600">Glossify</span>
     </div>
     <div class="flex items-center space-x-4">
-      <span class="text-xl font-semibold text-pink-600">Logout</span>
-      <a href="#" title="Logout">
-        <i class="fas fa-sign-out-alt text-pink-600 text-xl hover:text-pink-800"></i>
-      </a>
+      <a href="{{ url_for('home') }}" class="text-xl font-semibold text-pink-600 hover:text-pink-800">Home</a>
     </div>
   </nav>
 
@@ -31,7 +43,19 @@
   <main class="flex-grow flex items-center justify-center py-12">
     <div class="bg-white bg-opacity-90 p-8 rounded-xl shadow-2xl w-full max-w-sm">
       <h2 class="text-2xl font-bold text-pink-600 mb-6 text-center">Admin Login</h2>
-      <form action="admin_dashboard.html" method="POST" class="space-y-4">
+      
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      
+      <form action="{{ url_for('admin_login_page') }}" method="POST" class="space-y-4">
         <div>
           <label class="block mb-1 font-medium text-gray-700">Username</label>
           <input type="text" name="username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-400" required>
@@ -42,6 +66,12 @@
         </div>
         <button type="submit" class="w-full bg-pink-500 hover:bg-pink-600 text-white py-2 px-4 rounded-lg font-semibold">Login</button>
       </form>
+      
+      <div class="mt-4 text-center">
+        <p class="text-sm text-gray-600">Default admin credentials:</p>
+        <p class="text-xs text-gray-500">Username: admin</p>
+        <p class="text-xs text-gray-500">Password: admin123</p>
+      </div>
     </div>
   </main>
 

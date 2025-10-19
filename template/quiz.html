@@ -26,16 +26,16 @@
     
     <!-- Left Image or Branding -->
     <div class="hidden md:flex flex-col items-center justify-center bg-pink-100 p-6">
-      <img src="images/quiz-side (1).jpg" alt="Nail Polish Preview" class="rounded-xl mb-6 w-full object-cover max-h-96">
+      <img src="{{ url_for('static', filename='images/quiz-side (1).jpg') }}" alt="Nail Polish Preview" class="rounded-xl mb-6 w-full object-cover max-h-96">
       <h2 class="text-xl text-pink-600 font-bold">Let Your Style Shine</h2>
     </div>
 
     <!-- Quiz Form Section -->
     <div class="p-8">
-      <img src="images/quiz-side (2).jpg" alt="Glossify Quiz" class="w-full h-40 object-cover rounded-lg mb-6" />
+      <img src="{{ url_for('static', filename='images/quiz-side (2).jpg') }}" alt="Glossify Quiz" class="w-full h-40 object-cover rounded-lg mb-6" />
       <h2 class="text-3xl font-bold text-center text-pink-600 mb-6">Find Your Perfect Nail Polish</h2>
 
-      <form method="POST" action="{{ url_for('results') }}" class="space-y-5">
+      <form method="POST" action="{{ url_for('quiz_submission') }}" class="space-y-5">
         <div>
           <label for="age" class="block font-medium mb-1">Age</label>
           <input type="number" id="age" name="age" min="10" max="100" required
@@ -89,8 +89,58 @@
           Get Recommendations
         </button>
       </form>
+      <div class="mt-6" id="liveRecs" aria-live="polite"></div>
     </div>
   </div>
 
+<script>
+  const form = document.querySelector('form');
+  const ageEl = document.getElementById('age');
+  const skinEl = document.getElementById('skin_tone');
+  const finishEl = document.getElementById('finish_type');
+  const occEl = document.getElementById('occasion');
+  const outfitEl = document.getElementById('outfit_color');
+  const liveRecs = document.getElementById('liveRecs');
+
+  function collectInput() {
+    return {
+      age: parseInt(ageEl.value || '0', 10),
+      skin_tone: skinEl.value || '',
+      finish_type: finishEl.value || '',
+      outfit_color: outfitEl.value || '',
+      occasion: occEl.value || ''
+    };
+  }
+
+  function renderRecs(list) {
+    if (!Array.isArray(list) || list.length === 0) { liveRecs.innerHTML = ''; return; }
+    liveRecs.innerHTML = '<h3 class="text-lg font-semibold text-pink-600 mb-2">Live Recommendations</h3>' +
+      '<div class="grid gap-4 md:grid-cols-3">' +
+      list.map(r => (
+        '<div class="p-4 rounded-xl shadow bg-white text-center">' +
+          '<div style="background-color: ' + (r.hex_code || '#FF69B4') + ';" class="w-10 h-10 rounded-full mx-auto mb-2 border-2 border-pink-600"></div>' +
+          '<p class="text-sm">' + (r.brand_name || 'Unknown') + '</p>' +
+        '</div>'
+      )).join('') +
+      '</div>';
+  }
+
+  async function triggerLive() {
+    const payload = collectInput();
+    // Only trigger when core fields present
+    if (!payload.skin_tone || !payload.finish_type || !payload.occasion) { renderRecs([]); return; }
+    try {
+      const res = await fetch('/api/recommend/live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      renderRecs(data.recommendations || []);
+    } catch (e) { /* swallow for UX */ }
+  }
+
+  [ageEl, skinEl, finishEl, occEl, outfitEl].forEach(el => el.addEventListener('input', triggerLive));
+</script>
 </body>
 </html>

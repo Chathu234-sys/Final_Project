@@ -1,88 +1,93 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
+import os
+from typing import Dict, List
+
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
-from pathlib import Path
 
-# Model storage path
-MODEL_PATH = Path("model") / "glossify_net.pth"
 
-# ─── Model Architecture ───────────────────────────────
-class GlossifyNet(nn.Module):
-    def __init__(self, input_dim, hidden=64, output_dim=20):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, output_dim)
-        )
+_DATAFRAME_CACHE = None
 
-    def forward(self, x):
-        return self.net(x)
 
-# ─── Global encoder ───────────────────────────────────
-encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+def _get_dataset_path() -> str:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(
+        base_dir,
+        "data",
+        "datasets",
+        "nail_polish_datasets.csv",
+    )
 
-# ─── Dataset Loader ───────────────────────────────────
-def _load_dataset(csv_path="model/nail_polish_training.csv"):
+
+def _load_dataset() -> pd.DataFrame:
+    global _DATAFRAME_CACHE
+    if _DATAFRAME_CACHE is not None:
+        return _DATAFRAME_CACHE
+    csv_path = _get_dataset_path()
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"Dataset not found at: {csv_path}")
     df = pd.read_csv(csv_path)
-    X_raw = df[["skin_tone", "occasion", "finish_type"]].astype(str)
-    y = df["polish_id"].astype(int)
-    X = encoder.fit_transform(X_raw)
-    return torch.tensor(X, dtype=torch.float32), torch.tensor(y), encoder, int(y.max()) + 1
+    # Normalize column names for consistency
+    df.columns = [c.strip() for c in df.columns]
+    _DATAFRAME_CACHE = df
+    return df
 
-# ─── Model Trainer ────────────────────────────────────
-def train_model(csv_path="model/nail_polish_training.csv", epochs=50, lr=0.001):
-    X, y, enc, output_dim = _load_dataset(csv_path)
-    input_dim = X.shape[1]
-    model = GlossifyNet(input_dim=input_dim, output_dim=output_dim)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        logits = model(X)
-        loss = criterion(logits, y)
-        loss.backward()
-        optimizer.step()
-
-    MODEL_PATH.parent.mkdir(exist_ok=True)
-    torch.save({"model": model.state_dict(), "encoder": enc, "input_dim": input_dim, "output_dim": output_dim}, MODEL_PATH)
-    return loss.item()
-
-# ─── Load Model ───────────────────────────────────────
-def _load_model():
-    if not MODEL_PATH.exists():
-        return None, None
-    data = torch.load(MODEL_PATH, map_location="cpu")
-    model = GlossifyNet(data["input_dim"], output_dim=data["output_dim"])
-    model.load_state_dict(data["model"])
-    model.eval()
-    return model, data["encoder"]
-
-model, encoder = _load_model()
-
-# ─── Recommendation Logic ─────────────────────────────
-def recommend_polishes(user_input: dict, k=3):
+def recommend_polishes(user_input: Dict[str, str], top_n: int = 3) -> List[int]:
     """
-    user_input = {
-        'skin_tone': 'fair',
-        'occasion': 'party',
-        'finish_type': 'glossy'
-    }
+    Return top product IDs that match the user's quiz preferences.
+
+    This simple rule-based recommender filters the dataset by
+    skin tone, finish type, dress/outfit color, and occasion.
+    Then it picks the first top_n entries. The caller is expected
+    to map colors/brands to actual Product rows if needed.
     """
-    global model, encoder
-    if model is None or encoder is None:
-        return []
+    df = _load_dataset()
 
-    X = encoder.transform([[
-        user_input["skin_tone"],
-        user_input["occasion"],
-        user_input["finish_type"]
-    ]])
+    skin = (user_input.get("skin_tone") or "").strip().lower()
+    finish = (user_input.get("finish_type") or "").strip().lower()
+    outfit = (user_input.get("outfit_color") or "").strip().lower()
+    occasion = (user_input.get("occasion") or "").strip().lower()
 
-    logits = model(torch.tensor(X, dtype=torch.float32))
-    topk = logits.softmax(1).topk(k)
-    return topk.indices[0].tolist()
+    def norm(x: str) -> str:
+        return (x or "").strip().lower()
+
+    filtered = df[
+        (df["skin_tone"].map(norm) == skin)
+        & (df["finish_type"].map(norm) == finish)
+        & (df["dress_color"].map(norm) == outfit)
+        & (df["occasion"].map(norm) == occasion)
+    ]
+
+    if filtered.empty:
+        # Soften filters progressively
+        filtered = df[(df["skin_tone"].map(norm) == skin) & (df["finish_type"].map(norm) == finish)]
+        if filtered.empty:
+            filtered = df[(df["skin_tone"].map(norm) == skin)]
+        if filtered.empty:
+            filtered = df
+
+    # For simplicity, assign synthetic IDs based on row index
+    # In Flask app we map recommendations to Product table anyway
+    top_rows = filtered.head(top_n)
+    return list(top_rows.index.astype(int))
+
+
+def recommend_color_brand_pairs(user_input: Dict[str, str], top_n: int = 3) -> List[Dict[str, str]]:
+    """Return top_n color-brand pairs to aid UI rendering."""
+    df = _load_dataset()
+
+    ids = recommend_polishes(user_input, top_n=top_n)
+    rows = df.iloc[ids]
+    results: List[Dict[str, str]] = []
+    for _, r in rows.iterrows():
+        results.append(
+            {
+                "hex_color": str(r.get("recommended_hex_code", "#FF69B4")),
+                "brand": str(r.get("brand_name", "Unknown")),
+            }
+        )
+    return results
+
+
+
+
+

@@ -25,7 +25,7 @@
       font-family: 'Poppins', sans-serif;
     }
     .hero-bg {
-      background-image: url('images/capture.png');
+      background-image: url('../static/images/capture.png');
       background-size: cover;
       background-position: center;
     }
@@ -45,7 +45,7 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-16">
       <a href="#" class="flex items-center space-x-2">
-        <img src="images/logo2.PNG" alt="Glossify Logo" class="w-10 h-10 rounded-full object-cover">
+        <img src="../static/images/logo2.PNG" alt="Glossify Logo" class="w-10 h-10 rounded-full object-cover">
         <span class="text-2xl font-bold text-pink-600">Glossify</span>
       </a>
       <div class="hidden md:flex space-x-6 text-sm font-medium items-center">
@@ -101,17 +101,17 @@
       <h2 class="text-4xl font-bold text-center mb-12" data-aos="fade-up">Why Glossify?</h2>
       <div class="grid gap-10 md:grid-cols-3">
         <div class="glass p-8 text-center" data-aos="zoom-in">
-          <img src="images/trend.jfif" alt="Trend" class="mx-auto mb-4 w-20 h-20 object-cover rounded-full"  />
+          <img src="../static/images/trend.jfif" alt="Trend" class="mx-auto mb-4 w-20 h-20 object-cover rounded-full"  />
           <h3 class="text-xl font-semibold mb-2">Personalized Shades</h3>
           <p class="text-gray-600">AI-based recommendations tailored to your age, skin tone, and vibe.</p>
         </div>
         <div class="glass p-8 text-center" data-aos="zoom-in" data-aos-delay="100">
-          <img src="images/Capture1.PNG" alt="Shade" class="mx-auto mb-4 w-20 h-20 object-cover rounded-full" />
+          <img src="../static/images/Capture1.PNG" alt="Shade" class="mx-auto mb-4 w-20 h-20 object-cover rounded-full" />
           <h3 class="text-xl font-semibold mb-2">Stay on Trend</h3>
           <p class="text-gray-600">Browse trending shades and seasonal picks from beauty experts.</p>
         </div>
         <div class="glass p-8 text-center" data-aos="zoom-in" data-aos-delay="200">
-        <img src="images/download.jfif" alt="Smart Match" class="mx-auto mb-4 w-20 h-20 object-cover rounded-full" />
+        <img src="../static/images/download.jfif" alt="Smart Match" class="mx-auto mb-4 w-20 h-20 object-cover rounded-full" />
         <h3 class="text-xl font-semibold mb-2">Smart Occasion Match</h3>
         <p class="text-gray-600">Get the perfect nail polish for weddings, parties, or daily wear matched with your outfit and event.</p>
       </div>
@@ -130,12 +130,12 @@
             <p class="text-gray-600">Tell us a little about your preferences, like your skin tone, outfit color, and what kind of vibe you're going for (Daily, Parties, Wedding). It only takes a minute!</p>
           </div>
           <div class="flex-1">
-            <img src="images/Capture2.PNG" alt="Step 1" class="rounded-lg shadow-lg" />
+            <img src="../static/images/Capture2.PNG" alt="Step 1" class="rounded-lg shadow-lg" />
           </div>
         </div>
         <div class="flex flex-col md:flex-row items-center gap-8" data-aos="fade-left">
           <div class="flex-1">
-            <img src="images/download (1).jfif" alt="Step 2" class="rounded-lg shadow-lg" />
+            <img src="../static/images/download (1).jfif" alt="Step 2" class="rounded-lg shadow-lg" />
           </div>
           <div class="flex-1">
             <h3 class="text-2xl font-semibold mb-3">2. Get Matched</h3>
@@ -144,11 +144,11 @@
         </div>
         <div class="flex flex-col md:flex-row items-center gap-8" data-aos="fade-right">
           <div class="flex-1">
-            <h3 class="text-2xl font-semibold mb-3">3. Try & Buy</h3>
+            <h3 class="text-2xl font-semibold mb-3">3. Try </h3>
             <p class="text-gray-600">We recommend shades that match your style, so you can feel confident knowing you'll love what you get.</p>
           </div>
           <div class="flex-1">
-            <img src="images/download4.jfif" alt="Step 3" class="rounded-lg shadow-lg" />
+            <img src="../static/images/download4.jfif" alt="Step 3" class="rounded-lg shadow-lg" />
           </div>
         </div>
       </div>
@@ -179,11 +179,21 @@
     <p class="text-lg mb-8" data-aos="fade-up" data-aos-delay="100">
       Discover your perfect polish match — all it takes is one fun, personalized step.
     </p>
-    <a href="upload.html" 
-       class="bg-white text-pink-600 font-semibold py-3 px-10 rounded-full shadow-xl hover:bg-gray-100 hover:text-fuchsia-700 transition duration-300 inline-block"
-       data-aos="zoom-in" data-aos-delay="200">
-        💅 Upload Your Nail Image
-    </a>
+    <div class="flex space-x-4 justify-center mt-6">
+  <!-- Take Quiz Button -->
+  <a href="quiz.html" 
+     class="bg-white text-pink-600 font-semibold py-3 px-8 rounded-full shadow-md hover:bg-gray-100 hover:text-fuchsia-700 transition duration-300 inline-flex items-center space-x-2"
+     data-aos="zoom-in" data-aos-delay="100">
+     ✏️ <span>Take Quiz Now</span>
+  </a>
+
+  <!-- Upload Nail Image Button -->
+  <a href="upload.html" 
+     class="bg-white text-pink-600 font-semibold py-3 px-8 rounded-full shadow-md hover:bg-gray-100 hover:text-fuchsia-700 transition duration-300 inline-flex items-center space-x-2"
+     data-aos="zoom-in" data-aos-delay="200">
+     📸 <span>Upload Nail Image</span>
+  </a>
+</div>
   </div>
 </section>
 

@@ -58,26 +58,104 @@
     .btn-secondary:hover {
       background-color: #b52988;
     }
+
+    .quiz-summary {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 15px rgba(233, 30, 99, 0.1);
+    }
+
+    .price-tag {
+      background: #f8f9fa;
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      color: #e91e63;
+      display: inline-block;
+      margin: 10px 0;
+    }
+
+    .reason-text {
+      font-style: italic;
+      color: #666;
+      font-size: 0.9em;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="max-w-5xl mx-auto text-center">
-    <h2 class="text-4xl font-bold text-pink-600 mb-10">Your Recommended Shades</h2>
+    <h2 class="text-4xl font-bold text-pink-600 mb-6">Your Recommended Shades</h2>
+    <p class="text-lg text-gray-600 mb-8">Based on your preferences, here are your top nail polish matches:</p>
+
+    {% if request.args.get('shape') %}
+    <div class="quiz-summary max-w-2xl mx-auto mb-8">
+      <h3 class="text-xl font-semibold text-pink-600 mb-2">Predicted Nail Shape</h3>
+      <p class="text-gray-700">{{ request.args.get('shape') }}</p>
+    </div>
+    {% endif %}
     
-    <div class="grid gap-8 md:grid-cols-3">
-      {% for polish in recommendations %}
-      <div class="card">
-        <img src="{{ url_for('static', filename=polish.image) }}" alt="{{ polish.name }}">
-        <h3 class="text-xl font-semibold text-pink-500">{{ polish.name }}</h3>
-        <p class="text-sm mb-2"><strong>Brand:</strong> {{ polish.brand }}</p>
-        <div class="color-box" style="background-color: {{ polish.hex }}"></div>
+    <!-- Quiz Summary -->
+    {% if session.get('quiz_data') %}
+    <div class="quiz-summary max-w-2xl mx-auto mb-8">
+      <h3 class="text-xl font-semibold text-pink-600 mb-4">Your Quiz Results</h3>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+        <div><strong>Age:</strong> {{ session.quiz_data.age }}</div>
+        <div><strong>Skin Tone:</strong> {{ session.quiz_data.skin_tone|title }}</div>
+        <div><strong>Finish:</strong> {{ session.quiz_data.finish_type|title }}</div>
+        <div><strong>Occasion:</strong> {{ session.quiz_data.occasion|title }}</div>
+        <div><strong>Outfit:</strong> {{ session.quiz_data.outfit_color|title }}</div>
       </div>
+    </div>
+    {% endif %}
+    
+    <div class="grid gap-8 md:grid-cols-3 max-w-4xl mx-auto">
+      {% if session.get('recommendations') %}
+        {% for polish in session.recommendations %}
+          <div class="card">
+            <h3 class="text-xl font-semibold text-pink-500 mb-2">{{ polish.name }}</h3>
+            <p class="text-sm mb-2"><strong>Brand:</strong> {{ polish.brand }}</p>
+            {% if polish.hex_color %}
+              <div class="color-box" style="background-color: {{ polish.hex_color }}"></div>
+            {% endif %}
+            {# price removed as requested #}
+            {% if polish.reason %}
+              <p class="reason-text">{{ polish.reason }}</p>
+            {% endif %}
+          </div>
+        {% endfor %}
       {% else %}
-      <p class="col-span-full text-lg font-medium text-gray-600">No exact matches found. Try changing your answers!</p>
-      {% endfor %}
+        {% if hex1 and brand1 %}
+          <div class="card">
+            <div style="background-color: {{ hex1 }};" class="color-box"></div>
+            <p>{{ brand1 }}</p>
+          </div>
+          <div class="card">
+            <div style="background-color: {{ hex2 }};" class="color-box"></div>
+            <p>{{ brand2 }}</p>
+          </div>
+          <div class="card">
+            <div style="background-color: {{ hex3 }};" class="color-box"></div>
+            <p>{{ brand3 }}</p>
+          </div>
+        {% else %}
+          <div class="col-span-full">
+            <div class="card">
+              <h3 class="text-xl font-semibold text-pink-500 mb-4">No Recommendations Found</h3>
+              <p class="text-gray-600 mb-4">We couldn't generate recommendations based on your current preferences.</p>
+              <p class="text-sm text-gray-500">Try adjusting your quiz answers or contact our support team.</p>
+            </div>
+          </div>
+        {% endif %}
+      {% endif %}
     </div>
 
-    <a href="{{ url_for('quiz') }}" class="btn-secondary"> Try Again</a>
+    <div class="mt-8 space-x-4">
+      <a href="{{ url_for('quiz_page') }}" class="btn-secondary">Take Quiz Again</a>
+      <a href="{{ url_for('home') }}" class="btn-secondary" style="background-color: #6c757d;">Back to Home</a>
+    </div>
   </div>
 </body>
 </html>
