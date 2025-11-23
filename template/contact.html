@@ -46,6 +46,19 @@
 
   <!-- Contact Form Section -->
   <main class="flex-grow py-12 px-6 animate-fade-in">
+    <!-- Flash Messages -->
+    <div class="max-w-4xl mx-auto mb-6">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="px-4 py-3 rounded border mb-3 {{ 'bg-green-100 text-green-800 border-green-200' if category == 'success' else 'bg-red-100 text-red-800 border-red-200' }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
+
     <section class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
       <h2 class="text-3xl font-bold text-center text-pink-600 mb-6">Contact Us</h2>
       <p class="text-center text-gray-600 mb-8">We’d love to hear from you! Fill out the form below or contact us directly.</p>

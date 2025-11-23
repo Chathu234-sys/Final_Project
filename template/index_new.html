@@ -52,28 +52,31 @@
         <a href="#features" class="hover:text-pink-600">Features</a>
         <a href="#how" class="hover:text-pink-600">How It Works</a>
         <a href="#about" class="hover:text-pink-600">About Us</a>
-        <a href="#contact" class="hover:text-pink-600">Contact</a>
+        <a href="/contact" class="hover:text-pink-600">Contact</a>
+        {% if current_user.is_authenticated %}
+          <a href="/customer_history.html" class="hover:text-pink-600">My History</a>
+        {% endif %}
         
 <!-- Container for Login/Signup at top-right -->
 <div class="absolute top-4 right-4 flex items-center space-x-4 z-50">
   
-  <!-- LOGIN with toggle -->
-  <div class="relative">
-    <button id="loginToggle" class="bg-pink-500 text-white px-4 py-2 rounded-full font-medium hover:bg-pink-600 transition duration-300">
-      Login
-    </button>
-
-    <!-- Dropdown options -->
-    <div id="loginOptions" class="hidden absolute right-0 mt-2 flex flex-col space-y-2 bg-white shadow-lg p-4 rounded-lg w-40">
-      <a href="/login" class="bg-pink-500 text-white text-sm text-center py-2 rounded-full hover:bg-pink-600 transition">Customer</a>
-      <a href="/admin_login" class="bg-pink-500 text-white text-sm text-center py-2 rounded-full hover:bg-pink-600 transition">Admin</a>
+  {% if current_user.is_authenticated %}
+    <div class="text-sm text-pink-600 font-semibold">Hi, {{ current_user.username }}</div>
+    <a href="/logout" class="bg-pink-500 text-white px-4 py-2 rounded-full font-medium hover:bg-pink-600 transition duration-300">Logout</a>
+  {% else %}
+    <div class="relative">
+      <button id="loginToggle" class="bg-pink-500 text-white px-4 py-2 rounded-full font-medium hover:bg-pink-600 transition duration-300">
+        Login
+      </button>
+      <div id="loginOptions" class="hidden absolute right-0 mt-2 flex flex-col space-y-2 bg-white shadow-lg p-4 rounded-lg w-40">
+        <a href="/login" class="bg-pink-500 text-white text-sm text-center py-2 rounded-full hover:bg-pink-600 transition">Customer</a>
+        <a href="/admin/login" class="bg-pink-500 text-white text-sm text-center py-2 rounded-full hover:bg-pink-600 transition">Admin</a>
+      </div>
     </div>
-  </div>
-
-  <!-- SIGNUP -->
-  <a href="/signup" class="bg-pink-500 text-white px-4 py-2 rounded-full font-medium hover:bg-pink-600 transition duration-300">
-    Sign Up
-  </a>
+    <a href="/signup" class="bg-pink-500 text-white px-4 py-2 rounded-full font-medium hover:bg-pink-600 transition duration-300">
+      Sign Up
+    </a>
+  {% endif %}
 </div>
 
 

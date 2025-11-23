@@ -95,15 +95,6 @@
       analyzeFile(file);
     }
 
-    // Intercept form submit to use AJAX and show inline results
-    document.getElementById('uploadForm').addEventListener('submit', function (e) {
-      e.preventDefault();
-      errorMessage.textContent = '';
-      const file = fileInput.files && fileInput.files[0];
-      if (!file) { errorMessage.textContent = 'Please select an image.'; return; }
-      analyzeFile(file);
-    });
-
     function analyzeFile(file) {
       const formData = new FormData();
       formData.append('file', file);

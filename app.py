@@ -10,14 +10,15 @@ from datetime import datetime, timedelta
 from functools import wraps
 import json
 import numpy as np
+import joblib
+import tensorflow as tf
+import pandas as pd
 
 # Import ML modules
 try:
-    from nailpolish_model import recommend_polishes
     from nail_shape_analyzer import NailShapeAnalyzer
 except ImportError as e:
     print(f"Warning: ML modules not available: {e}")
-    recommend_polishes = None
     NailShapeAnalyzer = None
 
 app = Flask(__name__, template_folder='template', static_folder='static')
@@ -109,10 +110,10 @@ class Recommendation(db.Model):
     
     id = db.Column(db.Integer, primary_key=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)
     recommendation_score = db.Column(db.Float, nullable=True)
-    recommendation_reason = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    recommended_shades = db.Column(db.Text, nullable=False)
     
     # Relationships
     user = db.relationship("User", back_populates="recommendations")
@@ -183,23 +184,58 @@ def quiz_page():
 @app.route('/results')
 @app.route('/results.html')
 def results_page():
-    # If session recommendations already exist (quiz flow), render them directly
-    if session.get('recommendations'):
-        return render_template('results.html')
-
-    # Otherwise, fetch 3 from DB (upload flow case)
+    # Prefer dataset-based session hex codes if available
     try:
-        polishes = recommend_polish(features=None)
-        hex1 = polishes[0]['hex_code'] if len(polishes) > 0 else None
-        hex2 = polishes[1]['hex_code'] if len(polishes) > 1 else None
-        hex3 = polishes[2]['hex_code'] if len(polishes) > 2 else None
-        brand1 = polishes[0]['brand_name'] if len(polishes) > 0 else None
-        brand2 = polishes[1]['brand_name'] if len(polishes) > 1 else None
-        brand3 = polishes[2]['brand_name'] if len(polishes) > 2 else None
-        return render_template('results.html', hex1=hex1, brand1=brand1, hex2=hex2, brand2=brand2, hex3=hex3, brand3=brand3)
+        if session.get('dataset_hex'):
+            hexes = session.get('dataset_hex') or []
+            h1 = hexes[0] if len(hexes) > 0 else None
+            h2 = hexes[1] if len(hexes) > 1 else None
+            h3 = hexes[2] if len(hexes) > 2 else None
+            brands = session.get('dataset_brands') or []
+            b1 = brands[0] if len(brands) > 0 else None
+            b2 = brands[1] if len(brands) > 1 else None
+            b3 = brands[2] if len(brands) > 2 else None
+            return render_template('results.html', hex1=h1, hex2=h2, hex3=h3, brand1=b1, brand2=b2, brand3=b3)
+        # No dataset recommendations available
+        return render_template('results.html')
     except Exception as e:
         flash(f"Error loading recommendations: {e}", 'error')
-        return render_template('results.html')
+    return render_template('results.html')
+
+
+@app.route('/recommend', methods=['POST'])
+def recommend():
+    """Direct recommend route using dataset rules, returns results.html with hex1-3."""
+    try:
+        user_input = {
+            'skin_tone': request.form.get('skin_tone', ''),
+            'age': int(request.form.get('age', 0) or 0),
+            'finish_type': request.form.get('finish_type', ''),
+            'dress_color': request.form.get('dress_color') or request.form.get('outfit_color', ''),
+            'occasion': request.form.get('occasion', ''),
+            'brand_name': request.form.get('brand_name', '')
+        }
+
+        recs = recommend_from_dataset(user_input, top_n=3)
+        hexes = [r['hex'] for r in recs]
+        brands = [r['brand'] for r in recs]
+
+        while len(hexes) < 3:
+            hexes.append(None)
+            brands.append(None)
+
+        return render_template(
+            'results.html',
+            hex1=hexes[0],
+            hex2=hexes[1],
+            hex3=hexes[2],
+            brand1=brands[0],
+            brand2=brands[1],
+            brand3=brands[2],
+        )
+    except Exception as e:
+        flash(f'Recommendation error: {str(e)}', 'error')
+    return render_template('results.html')
 
 @app.route('/login')
 @app.route('/login.html')
@@ -216,6 +252,36 @@ def signup_page():
 def contact_page():
     return render_template('contact.html')
 
+
+@app.route('/send-message', methods=['POST'])
+def send_message():
+    try:
+        name = request.form.get('name')
+        email = request.form.get('email')
+        phone = request.form.get('phone')
+        message = request.form.get('message')
+
+        if not name or not email or not message:
+            flash('Please fill in required fields', 'error')
+            return redirect(url_for('contact_page'))
+
+        # Save to contacts table
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO contacts (name, email, phone, message, sent_at) VALUES (%s, %s, %s, %s, NOW())",
+            (name, email, phone, message)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        flash('Message sent successfully!', 'success')
+        return redirect(url_for('contact_page'))
+    except Exception as e:
+        flash(f'Failed to send message: {str(e)}', 'error')
+        return redirect(url_for('contact_page'))
+
 @app.route('/admin/login')
 @app.route('/admin_login.html')
 def admin_login_page():
@@ -228,7 +294,125 @@ def admin_dashboard_page():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('home'))
-    return render_template('admin_dashboard.html')
+    try:
+        total_users = User.query.count()
+        total_quizzes = QuizResult.query.count()
+    except Exception:
+        total_users = 0
+        total_quizzes = 0
+
+    # Load model training history from DB so it persists across refresh
+    training_history = []
+    last_retrained = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, training_date, training_time, status, created_at FROM modeltraininglog ORDER BY created_at DESC LIMIT 50"
+        )
+        rows = cur.fetchall()
+        training_history = [
+            {
+                'id': r[0],
+                'date': r[1].strftime('%Y-%m-%d') if r[1] else '',
+                'time': r[2].strftime('%H:%M') if r[2] else '',
+                'status': r[3],
+                'created_at': r[4].strftime('%Y-%m-%d %H:%M') if r[4] else ''
+            }
+            for r in rows
+        ]
+        if training_history:
+            last_retrained = training_history[0]['created_at']
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Failed to load training history: {e}")
+
+    return render_template(
+        'admin_dashboard.html',
+        total_users=total_users,
+        total_quizzes=total_quizzes,
+        training_history=training_history,
+        last_retrained=last_retrained
+    )
+
+
+@app.route('/admin/retrain', methods=['POST'])
+@login_required
+def admin_retrain_model():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # log into modeltraininglog (training_date, training_time, status, created_at)
+        cur.execute(
+            "INSERT INTO modeltraininglog (training_date, training_time, status, created_at) VALUES (CURDATE(), CURTIME(), %s, NOW())",
+            ("Success",)
+        )
+        conn.commit()
+        cur.execute("SELECT LAST_INSERT_ID()")
+        new_id = cur.fetchone()[0]
+        # Fetch the inserted row details
+        cur.execute(
+            "SELECT training_date, training_time, status, created_at FROM modeltraininglog WHERE id=%s",
+            (new_id,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        date_val = row[0] if row else None
+        time_val = row[1] if row else None
+        created_val = row[3] if row else None
+        def to_str(v, fmt=None):
+            try:
+                return v.strftime(fmt) if fmt and hasattr(v, 'strftime') else (str(v) if v is not None else '')
+            except Exception:
+                return str(v) if v is not None else ''
+        payload = {
+            'id': int(new_id),
+            'date': to_str(date_val, '%Y-%m-%d'),
+            'time': to_str(time_val, '%H:%M'),
+            'status': row[2] if row else 'Triggered',
+            'created_at': to_str(created_val, '%Y-%m-%d %H:%M')
+        }
+        return jsonify({'message': 'Training triggered and logged', 'row': payload})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/admin/training-history', methods=['GET'])
+@login_required
+def admin_training_history():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, training_date, training_time, status, created_at FROM modeltraininglog ORDER BY created_at DESC LIMIT 100"
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        def to_str(v, fmt=None):
+            try:
+                return v.strftime(fmt) if fmt and hasattr(v, 'strftime') else (str(v) if v is not None else '')
+            except Exception:
+                return str(v) if v is not None else ''
+        data = [
+            {
+                'id': int(r[0]),
+                'date': to_str(r[1], '%Y-%m-%d'),
+                'time': to_str(r[2], '%H:%M'),
+                'status': r[3],
+                'created_at': to_str(r[4], '%Y-%m-%d %H:%M')
+            }
+            for r in rows
+        ]
+        return jsonify({'rows': data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/manage-product')
 @app.route('/manage_product.html')
@@ -237,16 +421,103 @@ def manage_product_page():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('home'))
-    return render_template('manage_product.html')
+    try:
+        products = Product.query.order_by(Product.created_at.desc()).all()
+    except Exception:
+        products = []
+    return render_template('manage_product.html', products=products)
+
+
+@app.route('/admin/add-product', methods=['POST'])
+@login_required
+def admin_add_product():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('home'))
+    try:
+        name = request.form.get('name')
+        brand = request.form.get('brand')
+        hex_code = request.form.get('hex') or ''
+        finish_type = request.form.get('finish_type') or 'Unknown'
+
+        if not name or not brand:
+            flash('Name and Brand are required.', 'error')
+            return redirect(url_for('manage_product_page'))
+
+        # Use direct MySQL insert to ensure persistence in your existing schema
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO products (name, brand_name, hex_color, finish_type, created_at) VALUES (%s, %s, %s, %s, NOW())",
+            (name, brand, hex_code, finish_type)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash('Product added successfully.', 'success')
+    except Exception as e:
+        flash(f'Failed to add product: {str(e)}', 'error')
+    return redirect(url_for('manage_product_page'))
 
 @app.route('/admin/customer-history')
 @app.route('/customer_history.html')
 @login_required
 def customer_history_page():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('home'))
-    return render_template('customer_history.html')
+    if current_user.is_anonymous:
+        return redirect(url_for('login_page'))
+
+    target_user_id = current_user.id
+
+    quizzes = QuizResult.query.filter_by(user_id=target_user_id)\
+        .order_by(QuizResult.created_at.asc()).all()
+
+    history_data = []
+    for idx, quiz in enumerate(quizzes):
+        lower_bound = quiz.created_at or datetime.min
+        upper_bound = quizzes[idx + 1].created_at if idx + 1 < len(quizzes) else None
+
+        rec_query = Recommendation.query.filter(Recommendation.user_id == target_user_id)
+        rec_query = rec_query.filter(Recommendation.created_at >= lower_bound)
+        if upper_bound:
+            rec_query = rec_query.filter(Recommendation.created_at < upper_bound)
+
+        rec_rows = rec_query.order_by(Recommendation.created_at.asc()).all()
+        recs = []
+        for rec in rec_rows:
+            try:
+                shades = json.loads(rec.recommended_shades or "[]")
+            except (TypeError, json.JSONDecodeError):
+                shades = []
+            for shade in shades:
+                if isinstance(shade, dict):
+                    hex_code = shade.get('hex')
+                    brand_label = shade.get('brand')
+                else:
+                    hex_code = shade
+                    brand_label = None
+                if hex_code:
+                    recs.append({
+                        'hex': hex_code,
+                        'brand': brand_label or 'Recommended'
+                    })
+                if len(recs) >= 3:
+                    break
+            if len(recs) >= 3:
+                break
+
+        history_data.append({
+            'date': quiz.created_at.strftime('%Y-%m-%d %H:%M') if quiz.created_at else '--',
+            'age': quiz.age,
+            'skin_tone': quiz.skin_tone,
+            'occasion': quiz.occasion,
+            'finish_type': quiz.finish_type,
+            'dress_color': quiz.outfit_color,
+            'recommendations': recs
+        })
+
+    history_data = list(reversed(history_data))
+
+    return render_template('customer_history.html', history=history_data, profile=current_user)
 
 # Frontend Form Handling Routes
 @app.route('/signup', methods=['POST'])
@@ -292,19 +563,23 @@ def signup_form():
 
 @app.route('/login', methods=['POST'])
 def login_form():
-    """Handle login form submission"""
+    """Handle login form submission (email or username + password)."""
     try:
-        username = request.form.get('username')
+        identifier = request.form.get('email') or request.form.get('username')
         password = request.form.get('password')
         
-        if not username or not password:
-            flash('Please enter username and password', 'error')
+        if not identifier or not password:
+            flash('Please enter email/username and password', 'error')
             return redirect(url_for('login_page'))
         
-        user = User.query.filter_by(username=username).first()
+        # Prefer email lookup when input contains '@'
+        if '@' in identifier:
+            user = User.query.filter_by(email=identifier).first()
+        else:
+            user = User.query.filter_by(username=identifier).first()
         
         if not user or not check_password_hash(user.password_hash, password):
-            flash('Invalid username or password', 'error')
+            flash('Invalid credentials', 'error')
             return redirect(url_for('login_page'))
         
         login_user(user)
@@ -335,6 +610,23 @@ def admin_login_form():
         if not user.is_admin:
             flash('Access denied. Admin privileges required.', 'error')
             return redirect(url_for('admin_login_page'))
+        
+        # Save admin login event into admin_users table if not exists
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM admin_users WHERE username=%s LIMIT 1", (user.username,))
+            row = cur.fetchone()
+            if not row:
+                cur.execute(
+                    "INSERT INTO admin_users (username, password_hash) VALUES (%s, %s)",
+                    (user.username, user.password_hash)
+                )
+                conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"Admin user logging failed: {e}")
         
         login_user(user)
         flash('Admin login successful!', 'success')
@@ -373,42 +665,81 @@ def quiz_submission():
             'outfit_color': outfit_color,
             'occasion': occasion
         }
-
-        # Try ML-driven recommendations via nailpolish_model if available
+        
+        # Persist quiz result to database (quiz_results table)
         try:
-            user_input = {
-                'age': int(age),
-                'skin_tone': skin_tone,
-                'finish_type': finish_type,
-                'outfit_color': outfit_color,
-                'occasion': occasion
-            }
-            if recommend_polishes:
-                # Get color-brand pairs to render in results
-                try:
-                    from nailpolish_model import recommend_color_brand_pairs  # type: ignore
-                    color_brand = recommend_color_brand_pairs(user_input, top_n=3)
-                except Exception:
-                    # Fallback: map ids to simple objects
-                    ids = recommend_polishes(user_input)
-                    color_brand = [{'name': f"Shade #{i+1}", 'brand': 'Unknown', 'hex_color': '#FF69B4', 'price': 9.99, 'reason': 'Model pick'} for i in range(len(ids))]
-
-                # Normalize to the structure expected by results.html
-                normalized = []
-                for idx, cb in enumerate(color_brand):
-                    normalized.append({
-                        'name': f"Recommended Shade {idx+1}",
-                        'brand': cb.get('brand', 'Unknown'),
-                        'hex_color': cb.get('hex_color', '#FF69B4'),
-                        'price': 9.99,
-                        'reason': f"Based on your {skin_tone} skin tone and {occasion}"
-                    })
-                session['recommendations'] = normalized
+            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+                user_id_val = int(current_user.id)
             else:
-                session['recommendations'] = generate_simple_recommendations(skin_tone, finish_type, occasion)
-        except Exception:
-            # Final fallback
-            session['recommendations'] = generate_simple_recommendations(skin_tone, finish_type, occasion)
+                user_id_val = get_or_create_guest_user_id()
+            quiz_row = QuizResult(
+                user_id=user_id_val,
+                age=int(age),
+                skin_tone=skin_tone,
+                finish_type=finish_type,
+                outfit_color=outfit_color,
+                occasion=occasion
+            )
+            db.session.add(quiz_row)
+            db.session.commit()
+        except Exception as e:
+            # Do not block UX if DB save fails; log to console
+            print(f"Quiz save failed: {e}")
+        
+        # Dataset-based recommendations
+        user_input = {
+            'age': int(age),
+            'skin_tone': skin_tone,
+            'finish_type': finish_type,
+            'dress_color': outfit_color,
+            'occasion': occasion,
+            'brand_name': request.form.get('brand_name', '')
+        }
+        dataset_recs = recommend_from_dataset(user_input, top_n=3)
+        session['dataset_hex'] = [r['hex'] for r in dataset_recs]
+        session['dataset_brands'] = [r['brand'] for r in dataset_recs]
+
+        # Persist recommendations to database (recommendations table)
+        try:
+            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+                rec_user_id = int(current_user.id)
+            else:
+                rec_user_id = get_or_create_guest_user_id()
+
+            if dataset_recs:
+                # Ensure we have at least one linked product id to satisfy schema constraints
+                first_product_id = None
+                for rec in dataset_recs:
+                    hex_code = rec.get('hex')
+                    brand_label = rec.get('brand') or 'Glossify'
+                    if not hex_code:
+                        continue
+                    product = Product.query.filter_by(hex_color=hex_code, brand_name=brand_label).first()
+                    if not product:
+                        product = Product(
+                            name=f"{brand_label} {hex_code}",
+                            brand_name=brand_label,
+                            hex_color=hex_code,
+                            finish_type=finish_type or 'Unknown'
+                        )
+                        db.session.add(product)
+                        db.session.flush()
+                    if first_product_id is None:
+                        first_product_id = product.id
+
+                recommended_payload = json.dumps(dataset_recs)
+                rec_row = Recommendation(
+                    user_id=rec_user_id,
+                    product_id=first_product_id,
+                    recommendation_score=0.90,
+                    recommended_shades=recommended_payload
+                )
+                db.session.add(rec_row)
+
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Recommendation save failed: {e}")
         
         return redirect(url_for('results_page'))
         
@@ -423,11 +754,11 @@ def upload_nail_image():
         if 'file' not in request.files:
             flash('No file provided', 'error')
             return redirect(url_for('upload_page'))
-
+        
         file = request.files['file']
         if file.filename == '':
             flash('No file selected', 'error')
-            return redirect(url_for('upload_page'))
+            return answer(url_for('upload_page'))
 
         filename = secure_filename(file.filename)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -569,6 +900,239 @@ def get_or_create_guest_user_id() -> int:
         conn.close()
 
 # --- ML Helpers for Polish Recommendation ---
+# V3 artifact cache (loaded once)
+_V3_MODEL = None
+_V3_SCALER = None
+_V3_KMEANS = None
+_V3_LABEL_ENCODER = None
+_V3_PREPROCESSOR = None
+_DATASET_DF = None
+
+
+def _v3_paths():
+    """Resolve v3 artifact paths, tolerating singular/plural folder names and case differences.
+    Also detect a SavedModel export directory if present.
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    override_dir = os.environ.get('NAILPOLISH_MODEL_DIR')
+    candidate_dirs = []
+    if override_dir:
+        candidate_dirs.append(override_dir)
+    candidate_dirs.extend([
+        os.path.join(base_dir, 'data', 'trained_model', 'NailPolish_Model'),
+        os.path.join(base_dir, 'data', 'trained_models', 'NailPolish_Model'),
+    ])
+
+    def find_dir():
+        for d in candidate_dirs:
+            if os.path.isdir(d):
+                return d
+        return candidate_dirs[0]
+
+    model_dir = find_dir()
+
+    def find_file_ci(directory: str, names: list) -> str:
+        try:
+            entries = os.listdir(directory)
+            lower_map = {e.lower(): e for e in entries}
+            for name in names:
+                if name.lower() in lower_map:
+                    return os.path.join(directory, lower_map[name.lower()])
+        except Exception:
+            pass
+        return os.path.join(directory, names[0])
+
+    # Detect SavedModel folder: a subdir containing saved_model.pb
+    saved_dir = None
+    try:
+        for entry in os.listdir(model_dir):
+            full = os.path.join(model_dir, entry)
+            if os.path.isdir(full) and os.path.exists(os.path.join(full, 'saved_model.pb')):
+                saved_dir = full
+                break
+    except Exception:
+        saved_dir = None
+
+    return {
+        'model': find_file_ci(model_dir, ['nail_polish_model_v3.h5']),
+        'scaler': find_file_ci(model_dir, ['scaler_v3.pkl']),
+        'kmeans': find_file_ci(model_dir, ['Kmeans_v3.pkl', 'kmeans_v3.pkl']),
+        'label_encoder': find_file_ci(model_dir, ['label_encoder_v3.pkl']),
+        'preprocessor': find_file_ci(model_dir, ['preprocessor_v3.pkl']),
+        'saved_model_dir': saved_dir,
+        'dir': model_dir,
+    }
+
+
+def load_v3_artifacts():
+    global _V3_MODEL, _V3_SCALER, _V3_KMEANS, _V3_LABEL_ENCODER, _V3_PREPROCESSOR
+    if _V3_MODEL is not None:
+        return
+    paths = _v3_paths()
+    missing = []
+    for key in ['model', 'preprocessor', 'scaler', 'label_encoder']:
+        if not os.path.exists(paths[key]):
+            missing.append((key, paths[key]))
+    if missing:
+        details = '; '.join([f"{k}:{p}" for (k, p) in missing])
+        raise FileNotFoundError(f"Missing required v3 artifacts in {paths.get('dir')}: {details}")
+
+    # Prefer SavedModel if present (more tolerant across TF versions)
+    if paths.get('saved_model_dir') and os.path.isdir(paths['saved_model_dir']):
+        _V3_MODEL = tf.keras.models.load_model(paths['saved_model_dir'])
+    else:
+        # Tolerant model loading to handle Keras version differences
+        def _load_model_tolerant(model_path: str):
+            last_err = None
+            for attempt in (
+                ('tf_compile_safe', dict(compile=False, safe_mode=False)),
+                ('tf_compile_only', dict(compile=False)),
+                ('tf_custom_input', dict(compile=False, custom_objects={'InputLayer': tf.keras.layers.InputLayer})),
+                ('tf_plain', dict()),
+            ):
+                try:
+                    return tf.keras.models.load_model(model_path, **attempt[1])
+                except Exception as e:  # try next
+                    last_err = e
+                    continue
+            # Try compat.v1
+            try:
+                return tf.compat.v1.keras.models.load_model(model_path, compile=False)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load v3 model: {last_err or ''} / {e}")
+
+        _V3_MODEL = _load_model_tolerant(paths['model'])
+    _V3_PREPROCESSOR = joblib.load(paths['preprocessor'])
+    try:
+        _V3_SCALER = joblib.load(paths['scaler'])
+    except Exception:
+        _V3_SCALER = None
+    try:
+        _V3_KMEANS = joblib.load(paths['kmeans']) if os.path.exists(paths['kmeans']) else None
+    except Exception:
+        _V3_KMEANS = None
+    _V3_LABEL_ENCODER = joblib.load(paths['label_encoder'])
+
+
+def predict_hex_codes_v3(user_input: dict) -> list:
+    """Preprocess and predict top 3 HEX codes using v3 model + preprocessors."""
+    load_v3_artifacts()
+    # Expected keys: skin_tone, age, finish_type, dress_color, occasion, brand_name
+    # Build a single-row input for preprocessor
+    import pandas as pd
+    df = pd.DataFrame([{
+        'skin_tone': user_input.get('skin_tone', ''),
+        'age': int(user_input.get('age', 0) or 0),
+        'finish_type': user_input.get('finish_type', ''),
+        'dress_color': user_input.get('dress_color', ''),
+        'occasion': user_input.get('occasion', ''),
+        'brand_name': user_input.get('brand_name', ''),
+    }])
+
+    # Apply preprocessing pipeline
+    X_processed = _V3_PREPROCESSOR.transform(df)
+    # Optional scaling
+    try:
+        X_scaled = _V3_SCALER.transform(X_processed)
+    except Exception:
+        X_scaled = X_processed
+
+    # Optional kmeans (e.g., cluster id as additional feature)
+    try:
+        cluster = _V3_KMEANS.predict(X_scaled)
+        # Concatenate cluster as a feature if model expects it
+        import numpy as np
+        X_final = np.hstack([X_scaled, cluster.reshape(-1, 1)])
+    except Exception:
+        X_final = X_scaled
+
+    # Predict probabilities over HEX labels (assuming label-encoded hex classes)
+    probs = _V3_MODEL.predict(X_final, verbose=0)[0]
+    # Pick top-3 class indices
+    import numpy as np
+    top_indices = np.argsort(probs)[-3:][::-1]
+    # Map back to HEX codes via label encoder
+    hex_codes = _V3_LABEL_ENCODER.inverse_transform(top_indices)
+    return list(hex_codes)
+
+
+# --- Dataset-based recommendation (CSV) ---
+def _load_dataset():
+    global _DATASET_DF
+    if _DATASET_DF is not None:
+        return _DATASET_DF
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(base_dir, 'data', 'trained_models', 'NailPolish_Model', 'nail_polish_datasets.csv')
+    _DATASET_DF = pd.read_csv(csv_path)
+    # Normalize string columns
+    for col in ['skin_tone', 'finish_type', 'dress_color', 'occasion', 'brand_name', 'recommended_hex_code']:
+        if col in _DATASET_DF.columns:
+            _DATASET_DF[col] = _DATASET_DF[col].astype(str)
+    if 'age' in _DATASET_DF.columns:
+        _DATASET_DF['age'] = pd.to_numeric(_DATASET_DF['age'], errors='coerce').fillna(0)
+    return _DATASET_DF
+
+
+def recommend_from_dataset(user_input: dict, top_n: int = 3) -> list:
+    df = _load_dataset().copy()
+    if df.empty:
+        return []
+
+    def norm(val):
+        return (val or '').strip().lower()
+
+    filters = [
+        ('skin_tone', 'skin_tone'),
+        ('finish_type', 'finish_type'),
+        ('dress_color', 'dress_color'),
+        ('occasion', 'occasion')
+    ]
+
+    candidates = df
+    for col, key in filters:
+        desired = norm(user_input.get(key))
+        if not desired or col not in candidates.columns:
+            continue
+        filtered = candidates[candidates[col].str.lower() == desired]
+        if not filtered.empty:
+            candidates = filtered
+
+    if candidates.empty:
+        candidates = df
+
+    user_age = int(user_input.get('age', 0) or 0)
+    if 'age' in candidates.columns:
+        candidates = candidates.assign(age_diff=(candidates['age'] - user_age).abs())
+        candidates = candidates.sort_values(by='age_diff')
+    else:
+        candidates = candidates.head(top_n)
+
+    recs = []
+    for _, row in candidates.head(top_n).iterrows():
+        recs.append({
+            'hex': row.get('recommended_hex_code', '#FF69B4'),
+            'brand': row.get('brand_name', 'Unknown')
+        })
+    return recs
+
+
+def _get_brand_names_for_hexes(hex_list: list) -> list:
+    """Return brand names aligned to the provided HEX list using MySQL table nail_polishes.
+    If a hex is not found, return 'Unknown'.
+    """
+    if not hex_list:
+        return []
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        placeholders = ','.join(['%s'] * len(hex_list))
+        cur.execute(f"SELECT hex_code, brand_name FROM nail_polishes WHERE hex_code IN ({placeholders})", hex_list)
+        rows = cur.fetchall()
+        hex_to_brand = {row[0]: row[1] for row in rows}
+        return [hex_to_brand.get(h, 'Unknown') for h in hex_list]
+    finally:
+        cur.close()
+        conn.close()
 def predict_nail_shape(image_path: str) -> str:
     """Convenience function that loads model and predicts shape label."""
     analyzer = NailShapeAnalyzer()
@@ -576,183 +1140,35 @@ def predict_nail_shape(image_path: str) -> str:
     return shape
 
 
-def recommend_polish(features=None):
-    """
-    Load scaler and kmeans from data/trained_models/NailPolish_Model and
-    (optionally) use them to select top 3 nail polishes from MySQL.
-    If clustering fails or features are missing, fall back to first 3.
-    Returns list of dicts: [{brand_name, hex_code}, ...]
-    """
-    # Load artifacts (paths relative to project root)
-    import joblib  # lazy import
-
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_dir = os.path.join(base_dir, 'data', 'trained_models', 'NailPolish_Model')
-    scaler_path = os.path.join(model_dir, 'scaler.pkl')
-    kmeans_path = os.path.join(model_dir, 'kmeans.pkl')
-    model_path = os.path.join(model_dir, 'nail_polish_model.h5')
-    # Note: We do not need to load the .h5 here for DB-based selection
-
-    # Try to predict cluster (optional)
-    cluster_label = None
-    try:
-        scaler = joblib.load(scaler_path)
-        kmeans = joblib.load(kmeans_path)
-        if isinstance(features, dict):
-            feature_names = getattr(scaler, 'feature_names_in_', None)
-            if feature_names is not None:
-                # Build vector aligned to scaler feature names
-                lower_map = {k.lower(): v for k, v in features.items()}
-                vec = []
-                for name in feature_names:
-                    value = 0.0
-                    if name.lower() == 'age':
-                        try:
-                            value = float(lower_map.get('age', 0) or 0)
-                        except Exception:
-                            value = 0.0
-                    else:
-                        parts = name.split('_', 1)
-                        if len(parts) == 2:
-                            cat, val = parts[0].lower(), parts[1].lower()
-                            input_val = str(lower_map.get(cat, '')).lower()
-                            value = 1.0 if input_val == val else 0.0
-                    vec.append(value)
-                try:
-                    X = scaler.transform([vec])
-                    cluster_label = int(kmeans.predict(X)[0])
-                except Exception as e:
-                    print(f"Warning: clustering transform/predict failed: {e}")
-            else:
-                # Scaler missing feature names (sklearn version mismatch) → skip clustering
-                pass
-    except Exception as e:
-        print(f"Warning: clustering unavailable: {e}")
-
-    # Fetch polishes from MySQL
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Without a cluster column, simply return top 3. You can adapt this to your schema.
-    # Dynamic selection; if you have a cluster column you can filter by it.
-    cur.execute("SELECT brand_name, hex_code FROM nail_polishes ORDER BY RAND() LIMIT 3")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    results = []
-    for row in rows:
-        results.append({"brand_name": row[0], "hex_code": row[1]})
-    return results
-
-
 @app.route('/api/recommend/live', methods=['POST'])
 def api_recommend_live():
-    """Return top 3 color-brand pairs dynamically based on incoming quiz inputs."""
+    """Return top 3 HEX codes dynamically using dataset filter."""
     try:
         data = request.get_json() or {}
     except Exception:
         data = {}
     try:
-        results = recommend_polish(features=data)
-        return jsonify({'recommendations': results})
+        # Map expected keys
+        user_input = {
+            'skin_tone': data.get('skin_tone', ''),
+            'age': int(data.get('age', 0) or 0),
+            'finish_type': data.get('finish_type', ''),
+            'dress_color': data.get('outfit_color') or data.get('dress_color', ''),
+            'occasion': data.get('occasion', ''),
+            'brand_name': data.get('brand_name', '')
+        }
+        recs = recommend_from_dataset(user_input, top_n=3)
+        hexes = [r['hex'] for r in recs]
+        return jsonify({
+            'hex': hexes,
+            'brands': [r['brand'] for r in recs]
+        })
     except Exception as e:
-        # Fallback to DB top 3 if anything goes wrong
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT brand_name, hex_code FROM nail_polishes ORDER BY RAND() LIMIT 3")
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
-            return jsonify({'recommendations': [{"brand_name": r[0], "hex_code": r[1]} for r in rows]})
-        except Exception as db_e:
-            return jsonify({'error': f"{e} / {db_e}"}), 200
+        return jsonify({'error': str(e)}), 200
 
 def generate_simple_recommendations(skin_tone, finish_type, occasion):
     """Generate simple recommendations based on quiz data"""
     recommendations = []
-    
-    # Simple recommendation logic
-    if skin_tone == 'fair':
-        if finish_type == 'glossy':
-            recommendations.append({
-                'name': 'Classic Red',
-                'brand': 'OPI',
-                'hex_color': '#FF0000',
-                'price': 12.99,
-                'reason': 'Perfect for fair skin with glossy finish'
-            })
-        elif finish_type == 'matte':
-            recommendations.append({
-                'name': 'Nude Elegance',
-                'brand': 'Essie',
-                'hex_color': '#F5E6D3',
-                'price': 9.99,
-                'reason': 'Elegant nude for fair skin'
-            })
-    elif skin_tone == 'medium':
-        if finish_type == 'glossy':
-            recommendations.append({
-                'name': 'Rose Gold',
-                'brand': 'Revlon',
-                'hex_color': '#B76E79',
-                'price': 7.99,
-                'reason': 'Beautiful rose gold for medium skin'
-            })
-        elif finish_type == 'metallic':
-            recommendations.append({
-                'name': 'Midnight Blue',
-                'brand': 'Sally Hansen',
-                'hex_color': '#191970',
-                'price': 8.99,
-                'reason': 'Stunning metallic blue'
-            })
-    elif skin_tone == 'deep':
-        if finish_type == 'glossy':
-            recommendations.append({
-                'name': 'Emerald Green',
-                'brand': 'China Glaze',
-                'hex_color': '#50C878',
-                'price': 11.99,
-                'reason': 'Vibrant emerald for deep skin'
-            })
-        elif finish_type == 'glitter':
-            recommendations.append({
-                'name': 'Golden Sparkle',
-                'brand': 'OPI',
-                'hex_color': '#FFD700',
-                'price': 13.99,
-                'reason': 'Gorgeous glitter for special occasions'
-            })
-    
-    # Add some default recommendations if none were generated
-    if not recommendations:
-        recommendations = [
-            {
-                'name': 'Classic Red',
-                'brand': 'OPI',
-                'hex_color': '#FF0000',
-                'price': 12.99,
-                'reason': 'A timeless classic that suits everyone'
-            },
-            {
-                'name': 'Nude Elegance',
-                'brand': 'Essie',
-                'hex_color': '#F5E6D3',
-                'price': 9.99,
-                'reason': 'Perfect for everyday wear'
-            },
-            {
-                'name': 'Midnight Blue',
-                'brand': 'Sally Hansen',
-                'hex_color': '#191970',
-                'price': 8.99,
-                'reason': 'Elegant and sophisticated'
-            }
-        ]
-    
-    return recommendations
 
 # API Routes
 
@@ -799,15 +1215,18 @@ def api_register():
 def api_login():
     data = request.get_json()
     
-    if not data or not all(k in data for k in ['username', 'password']):
-        return jsonify({'error': 'Missing username or password'}), 400
-    
-    user = User.query.filter_by(username=data['username']).first()
+    if not data or 'password' not in data or (('username' not in data) and ('email' not in data)):
+        return jsonify({'error': 'Missing email/username or password'}), 400
+
+    identifier = data.get('email') or data.get('username')
+    if '@' in identifier:
+        user = User.query.filter_by(email=identifier).first()
+    else:
+        user = User.query.filter_by(username=identifier).first()
     
     if not user or not check_password_hash(user.password_hash, data['password']):
-        return jsonify({'error': 'Invalid username or password'}), 401
+        return jsonify({'error': 'Invalid credentials'}), 401
     
-    # Create JWT token
     token = create_jwt_token(user.id)
     
     return jsonify({
@@ -975,47 +1394,49 @@ def api_generate_recommendations(user):
     }
     
     try:
-        if recommend_polishes:
-            # Use ML recommendation
-            recommended_ids = recommend_polishes(user_input)
-            recommended_products = Product.query.filter(Product.id.in_(recommended_ids)).all()
-        else:
-            # Fallback recommendations
-            recommended_products = Product.query.limit(3).all()
-        
-        # Create recommendation records
-        recommendations = []
-        for product in recommended_products:
-            recommendation = Recommendation(
+        dataset_recs = recommend_from_dataset(user_input, top_n=3)
+        first_product_id = None
+        if dataset_recs:
+            for rec in dataset_recs:
+                hex_code = rec.get('hex')
+                brand_label = rec.get('brand') or 'Glossify'
+                if not hex_code:
+                    continue
+                product = Product.query.filter_by(hex_color=hex_code, brand_name=brand_label).first()
+                if not product:
+                    product = Product(
+                        name=f"{brand_label} {hex_code}",
+                        brand_name=brand_label,
+                        hex_color=hex_code,
+                        finish_type=quiz_result.finish_type
+                    )
+                    db.session.add(product)
+                    db.session.flush()
+                if first_product_id is None:
+                    first_product_id = product.id
+
+        recommendation_entry = None
+        if dataset_recs:
+            recommendation_entry = Recommendation(
                 user_id=user.id,
-                product_id=product.id,
-                recommendation_score=0.85,
-                recommendation_reason=f"Based on your {quiz_result.skin_tone} skin tone and {quiz_result.occasion} occasion"
+                product_id=first_product_id,
+                recommendation_score=0.90,
+                recommended_shades=json.dumps(dataset_recs)
             )
-            db.session.add(recommendation)
-            recommendations.append(recommendation)
-        
-        db.session.commit()
-        
+            db.session.add(recommendation_entry)
+            db.session.commit()
+        else:
+            db.session.commit()
+
         return jsonify({
             'message': 'Recommendations generated successfully',
             'recommendations': [
                 {
-                    'id': rec.id,
-                    'product': {
-                        'id': rec.product.id,
-                        'name': rec.product.name,
-                        'brand_name': rec.product.brand_name,
-                        'hex_color': rec.product.hex_color,
-                        'finish_type': rec.product.finish_type,
-                        'price': rec.product.price,
-                        'description': rec.product.description
-                    },
-                    'recommendation_score': rec.recommendation_score,
-                    'recommendation_reason': rec.recommendation_reason,
-                    'created_at': rec.created_at.isoformat()
+                    'id': recommendation_entry.id if recommendation_entry else None,
+                    'recommended_shades': dataset_recs,
+                    'recommendation_score': recommendation_entry.recommendation_score if recommendation_entry else None,
+                    'created_at': recommendation_entry.created_at.isoformat() if recommendation_entry else None
                 }
-                for rec in recommendations
             ]
         }), 201
         
@@ -1031,17 +1452,8 @@ def api_get_user_recommendations(user):
         'recommendations': [
             {
                 'id': rec.id,
-                'product': {
-                    'id': rec.product.id,
-                    'name': rec.product.name,
-                    'brand_name': rec.product.brand_name,
-                    'hex_color': rec.product.hex_color,
-                    'finish_type': rec.product.finish_type,
-                    'price': rec.product.price,
-                    'description': rec.product.description
-                },
+                'recommended_shades': json.loads(rec.recommended_shades or "[]"),
                 'recommendation_score': rec.recommendation_score,
-                'recommendation_reason': rec.recommendation_reason,
                 'created_at': rec.created_at.isoformat()
             }
             for rec in recommendations
@@ -1110,55 +1522,7 @@ def init_database():
                 )
                 db.session.add(admin_user)
                 
-                # Create sample products
-                sample_products = [
-                    Product(
-                        name="Classic Red",
-                        brand_name="OPI",
-                        hex_color="#FF0000",
-                        finish_type="Glossy",
-                        price=12.99,
-                        description="A timeless classic red nail polish"
-                    ),
-                    Product(
-                        name="Nude Elegance",
-                        brand_name="Essie",
-                        hex_color="#F5E6D3",
-                        finish_type="Matte",
-                        price=9.99,
-                        description="Perfect nude shade for everyday wear"
-                    ),
-                    Product(
-                        name="Midnight Blue",
-                        brand_name="Sally Hansen",
-                        hex_color="#191970",
-                        finish_type="Metallic",
-                        price=8.99,
-                        description="Deep blue with metallic finish"
-                    ),
-                    Product(
-                        name="Rose Gold",
-                        brand_name="Revlon",
-                        hex_color="#B76E79",
-                        finish_type="Glossy",
-                        price=7.99,
-                        description="Elegant rose gold shade"
-                    ),
-                    Product(
-                        name="Emerald Green",
-                        brand_name="China Glaze",
-                        hex_color="#50C878",
-                        finish_type="Glossy",
-                        price=11.99,
-                        description="Vibrant emerald green"
-                    )
-                ]
-                
-                for product in sample_products:
-                    db.session.add(product)
-                
-                db.session.commit()
-                print("Database initialized with admin user and sample products")
+                print("Database initialized with admin user")
             else:
                 print("Database already initialized")
                 

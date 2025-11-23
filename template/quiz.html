@@ -118,8 +118,8 @@
       '<div class="grid gap-4 md:grid-cols-3">' +
       list.map(r => (
         '<div class="p-4 rounded-xl shadow bg-white text-center">' +
-          '<div style="background-color: ' + (r.hex_code || '#FF69B4') + ';" class="w-10 h-10 rounded-full mx-auto mb-2 border-2 border-pink-600"></div>' +
-          '<p class="text-sm">' + (r.brand_name || 'Unknown') + '</p>' +
+          '<div style="background-color: ' + (r || '#FF69B4') + ';" class="w-10 h-10 rounded-full mx-auto mb-2 border-2 border-pink-600"></div>' +
+          '<p class="text-sm">HEX: ' + (r || '#FF69B4') + '</p>' +
         '</div>'
       )).join('') +
       '</div>';
@@ -136,7 +136,7 @@
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      renderRecs(data.recommendations || []);
+      renderRecs(data.hex || []);
     } catch (e) { /* swallow for UX */ }
   }
 

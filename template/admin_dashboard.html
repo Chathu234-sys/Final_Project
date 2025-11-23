@@ -43,26 +43,24 @@
   <div class="grid md:grid-cols-3 gap-6">
     <div class="bg-white p-6 rounded-lg shadow text-center">
       <h2 class="text-xl font-bold text-pink-600">Users</h2>
-      <p class="text-gray-600 mt-2">Total Registered: <span class="font-bold">--</span></p>
+      <p class="text-gray-600 mt-2">Total Registered: <span class="font-bold">{{ total_users }}</span></p>
     </div>
     <div class="bg-white p-6 rounded-lg shadow text-center">
       <h2 class="text-xl font-bold text-pink-600">Quizzes Taken</h2>
-      <p class="text-gray-600 mt-2">Today: <span class="font-bold">--</span></p>
+      <p class="text-gray-600 mt-2">Total: <span class="font-bold">{{ total_quizzes }}</span></p>
     </div>
-    <div class="bg-white p-6 rounded-lg shadow text-center">
-      <h2 class="text-xl font-bold text-pink-600">Polishes</h2>
-      <p class="text-gray-600 mt-2">Total in Database: <span class="font-bold">--</span></p>
-    </div>
+    <!-- Removed Polishes card as requested -->
   </div>
 
   <!-- Model Retraining Section -->
   <div class="mt-10">
     <p class="mb-4 text-sm text-gray-600">
-      <strong>Model last retrained:</strong> <span id="lastRetrained" class="text-pink-600 font-medium">--</span>
+      <strong>Model last retrained:</strong>
+      <span id="lastRetrained" class="text-pink-600 font-medium">{{ last_retrained or '--' }}</span>
     </p>
     <div class="flex flex-col md:flex-row gap-4 mb-6">
       <a href="manage_product.html" class="inline-block bg-pink-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-pink-600 transition">Manage Products</a>
-      <form id="retrainForm" method="POST">
+      <form id="retrainForm" method="POST" action="/admin/retrain">
         <button type="submit" class="inline-block bg-pink-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-pink-600 transition">Retrain Model</button>
       </form>
     </div>
@@ -80,14 +78,18 @@
           </tr>
         </thead>
         <tbody id="trainingHistory">
-          <!-- Example static rows; in real usage, populate from server -->
-          
+          {% for row in training_history %}
           <tr class="border-t">
-            <td class="px-4 py-2">2</td>
-            <td class="px-4 py-2">2025-07-22</td>
-            <td class="px-4 py-2">02:30 PM</td>
-            <td class="px-4 py-2 text-green-600 font-semibold">Success</td>
+            <td class="px-4 py-2">{{ row.id }}</td>
+            <td class="px-4 py-2">{{ row.date }}</td>
+            <td class="px-4 py-2">{{ row.time }}</td>
+            <td class="px-4 py-2 text-green-600 font-semibold">{{ row.status }}</td>
           </tr>
+          {% else %}
+          <tr class="border-t">
+            <td class="px-4 py-2" colspan="4">No training history yet.</td>
+          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -105,30 +107,57 @@
   const overlay = document.getElementById('loadingOverlay');
   const lastRetrained = document.getElementById('lastRetrained');
 
-  form.addEventListener('submit', function (e) {
-    overlay.classList.remove('hidden');
-
-    // Simulate model training and date update (you'll replace with actual POST and backend handling)
-    setTimeout(() => {
-      overlay.classList.add('hidden');
-
-      const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      lastRetrained.textContent = `${dateStr} ${timeStr}`;
-
-      const table = document.getElementById('trainingHistory');
-      const newRow = `
-        <tr class="border-t">
-          <td class="px-4 py-2">${table.rows.length + 1}</td>
-          <td class="px-4 py-2">${dateStr}</td>
-          <td class="px-4 py-2">${timeStr}</td>
-          <td class="px-4 py-2 text-green-600 font-semibold">Success</td>
-        </tr>`;
-      table.insertAdjacentHTML('afterbegin', newRow);
-    }, 2500); // Simulate delay
+  form.addEventListener('submit', async function (e) {
     e.preventDefault();
+    overlay.classList.remove('hidden');
+    try {
+      const res = await fetch(form.action, { method: 'POST' });
+      overlay.classList.add('hidden');
+      const data = await res.json();
+      if (data && data.row) {
+        lastRetrained.textContent = data.row.created_at || (data.row.date + ' ' + data.row.time);
+        const table = document.getElementById('trainingHistory');
+        const newRow = `
+          <tr class="border-t">
+            <td class="px-4 py-2">${data.row.id}</td>
+            <td class="px-4 py-2">${data.row.date}</td>
+            <td class="px-4 py-2">${data.row.time}</td>
+            <td class="px-4 py-2 text-green-600 font-semibold">${data.row.status}</td>
+          </tr>`;
+        table.insertAdjacentHTML('afterbegin', newRow);
+      }
+    } catch (err) {
+      overlay.classList.add('hidden');
+      alert('Failed to trigger retraining');
+    }
+  });
+
+  // On load, fetch latest history rows so the table persists across refresh
+  window.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const res = await fetch('/admin/training-history');
+      const data = await res.json();
+      if (data && Array.isArray(data.rows)) {
+        const table = document.getElementById('trainingHistory');
+        table.innerHTML = '';
+        data.rows.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.className = 'border-t';
+          tr.innerHTML = `
+            <td class="px-4 py-2">${row.id}</td>
+            <td class="px-4 py-2">${row.date}</td>
+            <td class="px-4 py-2">${row.time}</td>
+            <td class="px-4 py-2 text-green-600 font-semibold">${row.status}</td>
+          `;
+          table.appendChild(tr);
+        });
+        if (data.rows.length > 0) {
+          lastRetrained.textContent = data.rows[0].created_at || (data.rows[0].date + ' ' + data.rows[0].time);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load training history');
+    }
   });
 </script>
 

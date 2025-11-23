@@ -104,7 +104,7 @@ class NailShapeAnalyzer:
         if found:
             self.labels = list(sidecar_labels)
         else:
-            # Default to provided class indices order: 0:almond,1:oval,2:squoval,3:square,4:stiletto
+            
             self.labels = ["almond", "oval", "squoval", "square", "stiletto"]
 
         if _MODEL_INSTANCE is None:
@@ -222,12 +222,12 @@ class NailShapeAnalyzer:
         return label, confidence
 
     def _looks_like_human_hand(self, image_path: str) -> bool:
-        # Try MediaPipe if available for high accuracy
+       
         if mp is not None and cv2 is not None:
             try:
                 img = cv2.imread(image_path)
                 if img is None:
-                    return True  # don't block if read fails
+                    return True  
                 max_w = 800
                 if img.shape[1] > max_w:
                     scale = max_w / img.shape[1]
@@ -246,7 +246,7 @@ class NailShapeAnalyzer:
                 if img is None:
                     return True
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-                # Broad skin range; may vary with lighting
+               
                 lower = np.array([0, 20, 50], dtype=np.uint8)
                 upper = np.array([25, 255, 255], dtype=np.uint8)
                 mask = cv2.inRange(hsv, lower, upper)

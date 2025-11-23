@@ -35,11 +35,11 @@
         <tbody>
           <tr class="border-b border-gray-200">
             <th class="py-2 px-4 font-medium text-pink-600 w-32">Name</th>
-            <td class="py-2 px-4"> <!-- User name here --> </td>
+            <td class="py-2 px-4">{{ profile.username if profile else 'N/A' }}</td>
           </tr>
           <tr>
             <th class="py-2 px-4 font-medium text-pink-600">Email</th>
-            <td class="py-2 px-4"> <!-- User email here --> </td>
+            <td class="py-2 px-4">{{ profile.email if profile else 'N/A' }}</td>
           </tr>
         </tbody>
       </table>
@@ -49,10 +49,7 @@
     <section class="bg-white rounded-lg shadow p-6">
       <h3 class="text-xl font-semibold text-pink-500 mb-4">Quiz History</h3>
 
-      <!-- If no history -->
-      <p class="text-center text-gray-500 mb-4">You haven't taken any quizzes yet.</p>
-
-      <!-- If history exists, show this table -->
+      {% if history %}
       <table class="w-full border-collapse text-left">
         <thead>
           <tr class="bg-pink-100 text-pink-700">
@@ -66,24 +63,36 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Example row: replace with your loop/template -->
+          {% for entry in history %}
           <tr class="hover:bg-pink-50">
-            <td class="py-2 px-4 border border-pink-300">-</td>
-            <td class="py-2 px-4 border border-pink-300">-</td>
-            <td class="py-2 px-4 border border-pink-300">-</td>
-            <td class="py-2 px-4 border border-pink-300">-</td>
-            <td class="py-2 px-4 border border-pink-300">-</td>
-            <td class="py-2 px-4 border border-pink-300">-</td>
+            <td class="py-2 px-4 border border-pink-300">{{ entry.date }}</td>
+            <td class="py-2 px-4 border border-pink-300">{{ entry.age }}</td>
+            <td class="py-2 px-4 border border-pink-300">{{ entry.skin_tone|title }}</td>
+            <td class="py-2 px-4 border border-pink-300">{{ entry.occasion|title }}</td>
+            <td class="py-2 px-4 border border-pink-300">{{ entry.finish_type|title }}</td>
+            <td class="py-2 px-4 border border-pink-300">{{ entry.dress_color|title }}</td>
             <td class="py-2 px-4 border border-pink-300">
-              <div class="flex space-x-2">
-                <img src="{{ url_for('static', filename=shade.image) }}" alt="{{ shade.name }}" class="w-10 h-10 object-cover rounded" />
-                <span class="self-center">{{ shade.name }}</span>
+              {% if entry.recommendations %}
+              <div class="flex flex-wrap gap-4">
+                {% for rec in entry.recommendations %}
+                <div class="flex flex-col items-center">
+                  <div class="w-8 h-8 rounded-full border border-gray-300" style="background-color: {{ rec.hex }}"></div>
+                  <span class="text-xs text-gray-700 mt-1">{{ rec.brand }}</span>
+                  <span class="text-[10px] text-gray-500">{{ rec.hex }}</span>
+                </div>
+                {% endfor %}
               </div>
+              {% else %}
+              <span class="text-gray-400 text-sm">No shades saved</span>
+              {% endif %}
             </td>
           </tr>
-          <!-- Repeat above tr for each history entry -->
+          {% endfor %}
         </tbody>
       </table>
+      {% else %}
+      <p class="text-center text-gray-500 mb-4">You haven't taken any quizzes yet.</p>
+      {% endif %}
     </section>
 
   </main>
